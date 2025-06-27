@@ -1,0 +1,271 @@
+#--Set your Working Directory as per the data location
+
+import numpy as np
+import pandas as pd
+
+# Load raw data
+EXL2 = pd.ExcelFile('bitre_fatalities_dec2024.xlsx')
+EXL1 = pd.ExcelFile('bitre_fatal_crashes_dec2024.xlsx')
+
+fatalities = pd.read_excel(EXL2, sheet_name='BITRE_Fatality', header=4)
+crashes = pd.read_excel(EXL1, sheet_name='BITRE_Fatal_Crash', header=4)
+
+# Strip whitespaces from column names
+fatalities.columns = fatalities.columns.str.strip()
+crashes.columns = crashes.columns.str.strip()
+
+# Replace -9 with NaN
+fatalities.replace(-9, np.nan, inplace=True)
+crashes.replace(-9, np.nan, inplace=True)
+
+# Standardize column names
+fatalities.rename(columns={"Crash ID": "CrashID"}, inplace=True)
+crashes.rename(columns={"Crash ID": "CrashID"}, inplace=True)
+
+# Find the number of rows before dropping
+initial_crashes_rows = crashes.shape[0]
+initial_fatalities_rows = fatalities.shape[0]
+
+# Drop rows with critical missing values
+crashes.dropna(subset=['CrashID', 'Speed Limit'], inplace=True)
+fatalities.dropna(subset=['CrashID', 'Gender', 'Age'], inplace=True)
+
+# Find the number of rows after dropping
+final_crashes_rows = crashes.shape[0]
+final_fatalities_rows = fatalities.shape[0]
+
+# Calculate number of rows dropped and percentage of rows dropped on excluding NA
+crashes_dropped = initial_crashes_rows - final_crashes_rows
+fatalities_dropped = initial_fatalities_rows - final_fatalities_rows
+
+crashes_dropped_percentage = (crashes_dropped / initial_crashes_rows) * 100
+fatalities_dropped_percentage = (fatalities_dropped / initial_fatalities_rows) * 100
+
+# Print results
+print(f"Crashes data: {crashes_dropped} rows dropped, {crashes_dropped_percentage:.2f}% of total data")
+print(f"Fatalities data: {fatalities_dropped} rows dropped, {fatalities_dropped_percentage:.2f}% of total data")
+
+# Continue with the rest of the processing...
+# Ensure 'Speed Limit' is numeric (convert to NaN where conversion fails)
+crashes['Speed Limit'] = pd.to_numeric(crashes['Speed Limit'], errors='coerce')
+fatalities['Speed Limit'] = pd.to_numeric(fatalities['Speed Limit'], errors='coerce')
+
+# Drop rows where 'Speed Limit' is NaN after conversion (if necessary)
+crashes.dropna(subset=['Speed Limit'], inplace=True)
+fatalities.dropna(subset=['Speed Limit'], inplace=True)
+
+# Create Age Group column
+age_bins = [0, 12, 17, 25, 59, np.inf]
+age_labels = ['Child', 'Teen', 'Young Adult', 'Adult', 'Senior']
+fatalities['Age_Group'] = pd.cut(fatalities['Age'], bins=age_bins, labels=age_labels, right=True)
+
+# Group Speed Limit into categories
+speed_bins = [0, 50, 90, np.inf]
+speed_labels = ['Low', 'Medium', 'High']
+fatalities['Speed_Group'] = pd.cut(fatalities['Speed Limit'], bins=speed_bins, labels=speed_labels, right=True)
+crashes['Speed_Group'] = pd.cut(crashes['Speed Limit'], bins=speed_bins, labels=speed_labels, right=True)
+
+# Remove duplicates
+crashes.drop_duplicates(inplace=True)
+fatalities.drop_duplicates(inplace=True)
+
+# Save cleaned and enriched data
+crashes.to_csv('cleaned_crashes.csv', index=False)
+fatalities.to_csv('cleaned_fatalities.csv', index=False)
+
+# Display summary
+print(f"\nFatalities data shape: {fatalities.shape}")
+print(f"Crashes data shape: {crashes.shape}")
+print("\nSample rows from fatalities:\n", fatalities[['Age', 'Age_Group', 'Speed Limit', 'Speed_Group']].head(10))
+print("\nSample rows from crashes:\n", crashes[['Speed Limit', 'Speed_Group']].head(10))
+print("\n Data ET completed. Files saved with Age and Speed groupings.")
+
+population= pd.read_csv('LGA_P.csv')
+
+#The data had error with Friday as both weekday and weekend
+# Define the mapping for Weekday and Weekend
+day_category = {
+    'Monday': 'Weekday',
+    'Tuesday': 'Weekday',
+    'Wednesday': 'Weekday',
+    'Thursday': 'Weekday',
+    'Friday': 'Weekday',
+    'Saturday': 'Weekend',
+    'Sunday': 'Weekend'
+}
+fatalities['Dayweek'] = fatalities['Dayweek'].str.strip().str.title()
+# Add a new column 'Day_Category' based on 'Day week'
+fatalities['Day_Category'] = fatalities['Dayweek'].map(day_category)
+
+# Print Result to check the Code 
+print(fatalities[['Dayweek', 'Day_Category']].head())
+
+-----Create Dimension Tables-----
+
+# 1. Dim_Location
+dim_location = crashes[['State','National Remoteness Areas','SA4 Name 2021','National LGA Name 2021']].drop_duplicates().reset_index(drop=True)
+dim_location['Location_PK'] = "LOC" + (dim_location.index + 1).astype(str)
+dim_location = dim_location[['Location_PK','State','National Remoteness Areas','SA4 Name 2021','National LGA Name 2021']]
+dim_location
+
+# 2. Dim_RoadType
+dim_roadtype = crashes[['National Road Type']].drop_duplicates().reset_index(drop=True)
+dim_roadtype['RoadType_PK'] = "ROAD" +( dim_roadtype.index + 1).astype(str)
+dim_roadtype = dim_roadtype[['RoadType_PK','National Road Type']]
+dim_roadtype
+
+# 3. Dim_Date
+dim_date = fatalities[['Year', 'Month', 'Dayweek','Day_Category']].drop_duplicates().reset_index(drop=True)
+dim_date['Date_PK'] ="DATE" +( dim_date.index + 1).astype(str)
+dim_date = dim_date[['Date_PK','Year', 'Month', 'Dayweek','Day_Category']]
+dim_date
+
+# 4. Dim_HolidayPeriod
+dim_HolidayPeriod = fatalities[[ 'Christmas Period', 'Easter Period']].drop_duplicates().reset_index(drop=True)
+dim_HolidayPeriod ['Holiday_PK'] ="HOL" +( dim_HolidayPeriod.index + 1).astype(str)
+dim_HolidayPeriod = dim_HolidayPeriod [['Holiday_PK','Christmas Period', 'Easter Period']]
+dim_HolidayPeriod 
+
+# 5. Dim_Time
+dim_time = crashes[['Time','Time of Day']].drop_duplicates().reset_index(drop=True)
+dim_time['Time_PK'] = "TIME"+(dim_time.index + 1).astype(str)
+dim_time = dim_time [['Time_PK','Time','Time of Day']]
+dim_time
+
+# 6. Dim_Victim
+dim_victim = fatalities[['Gender', 'Age Group', 'Road User', 'Age']].drop_duplicates().reset_index(drop=True)
+dim_victim['Victim_PK'] = "VICTIM"+(dim_victim.index + 1).astype(str)
+dim_victim  = dim_victim  [['Victim_PK','Gender', 'Age Group', 'Road User', 'Age']]
+dim_victim 
+
+# 7. Dim_Crash
+dim_crash = fatalities[['CrashID', 'Crash Type', 'Speed Limit','Speed_Group','Bus Involvement','Heavy Rigid Truck Involvement',
+                     'Articulated Truck Involvement']].drop_duplicates().reset_index(drop=True)
+dim_crash['Crash_PK'] = "CRASH"+(dim_crash.index + 1).astype(str)
+dim_crash  = dim_crash  [['Crash_PK','CrashID', 'Crash Type', 'Speed Limit','Speed_Group','Bus Involvement','Heavy Rigid Truck Involvement',
+                     'Articulated Truck Involvement']]
+dim_crash 
+
+# 8. Dim_Population
+dim_population = population[['LGA code', 'Local Government Area','Year', 'Population']].drop_duplicates().reset_index(drop=True)
+dim_population['Population_PK'] ="POP"+(dim_population.index + 1).astype(str)
+dim_population = dim_population[['Population_PK','LGA code', 'Local Government Area', 'Year','Population']]
+dim_population
+
+
+
+#saving all teh dimension Tables as CSV:
+dim_location.to_csv('dim_location.csv', index=False)
+dim_roadtype.to_csv('dim_roadtype.csv', index=False)
+dim_date.to_csv('dim_date.csv', index=False)
+dim_HolidayPeriod.to_csv('dim_holidayperiod.csv', index=False)
+dim_time.to_csv('dim_time.csv', index=False)
+dim_victim.to_csv('dim_victim.csv', index=False)
+dim_crash.to_csv('dim_crash.csv', index=False)
+dim_population.to_csv('dim_population.csv', index=False)
+
+#  Create Fact_Fatality 
+
+fact_fatality = fatalities.merge(dim_location, left_on=['State', 'National Remoteness Areas', 'SA4 Name 2021', 'National LGA Name 2021'], 
+                                 right_on=['State', 'National Remoteness Areas', 'SA4 Name 2021', 'National LGA Name 2021'], how='left') \
+    .merge(dim_roadtype, left_on='National Road Type', right_on='National Road Type', how='left') \
+    .merge(dim_date, left_on=['Year', 'Month', 'Dayweek', 'Day_Category'], right_on=['Year', 'Month', 'Dayweek', 'Day_Category'], how='left') \
+    .merge(dim_HolidayPeriod, left_on=['Christmas Period', 'Easter Period'], right_on=['Christmas Period', 'Easter Period'], how='left') \
+    .merge(dim_time, left_on='Time', right_on='Time', how='left') \
+    .merge(dim_victim, left_on=['Gender', 'Age Group', 'Road User', 'Age'], right_on=['Gender', 'Age Group', 'Road User', 'Age'], how='left') \
+    .merge(dim_crash, left_on='CrashID', right_on='CrashID', how='left') \
+    .merge(dim_population, left_on=['National LGA Name 2021'], right_on=[ 'Local Government Area'], how='left')\
+    .merge(crashes[['CrashID', 'Number Fatalities']], on='CrashID', how='left')
+# Add the primary key
+fact_fatality['F_PK'] = "F" + (fact_fatality.index + 1).astype(str)
+# Final selection of columns
+fact_fatality = fact_fatality[['F_PK', 'Location_PK', 'RoadType_PK', 'Date_PK', 'Holiday_PK', 'Time_PK', 'Victim_PK', 'Crash_PK', 'Population_PK','Number Fatalities']]
+
+fact_fatality.head(5)
+print(f"data shape: {fact_fatality.shape}")
+
+# Save the fact table to CSV
+fact_fatality .to_csv('fact_fatality.csv', index=False)
+
+!pip install mlxtend
+import mlxtend
+from mlxtend.preprocessing import TransactionEncoder
+from mlxtend.frequent_patterns import apriori
+from mlxtend.frequent_patterns import association_rules
+
+# Load the fact table and dimension tables
+fact = pd.read_csv('fact_fatality.csv')
+dim_location = pd.read_csv('dim_location.csv')
+dim_roadtype = pd.read_csv('dim_roadtype.csv')
+dim_date = pd.read_csv('dim_date.csv')
+dim_holidayperiod = pd.read_csv('dim_holidayperiod.csv')
+dim_time = pd.read_csv('dim_time.csv')
+dim_victim = pd.read_csv('dim_victim.csv')
+dim_crash = pd.read_csv('dim_crash.csv')
+dim_population = pd.read_csv('dim_population.csv')
+
+# Merge all the tables into one enriched dataset for mining
+merged = fact.merge(dim_location, on='Location_PK', how='left') \
+             .merge(dim_roadtype, on='RoadType_PK', how='left') \
+             .merge(dim_date, on='Date_PK', how='left') \
+             .merge(dim_holidayperiod, on='Holiday_PK', how='left') \
+             .merge(dim_time, on='Time_PK', how='left') \
+             .merge(dim_victim, on='Victim_PK', how='left') \
+             .merge(dim_crash, on='Crash_PK', how='left') \
+             .merge(dim_population, on='Population_PK', how='left')
+# Select relevant categorical columns to create transaction data
+selected_columns = ['State', 'National Remoteness Areas', 'National Road Type', 'Dayweek',
+ 'Day_Category', 'Christmas Period', 'Easter Period', 'Time of Day', 
+ 'Gender', 'Age Group', 'Road User', 'Crash Type', 'Speed_Group']
+
+# Convert selected columns to strings
+merged[selected_columns] = merged[selected_columns].astype(str)
+
+# Convert each row into a list of categorical values
+transactions = merged[selected_columns].values.tolist()
+
+# Encode the transaction data
+te = TransactionEncoder()
+te_array = te.fit(transactions).transform(transactions)
+df_te = pd.DataFrame(te_array, columns=te.columns_)
+
+# Apply Apriori algorithm to get frequent itemsets
+frequent_itemsets = apriori(df_te, min_support=0.05, use_colnames=True)
+
+# Add itemset length for filtering
+frequent_itemsets['length'] = frequent_itemsets['itemsets'].apply(lambda x: len(x))
+
+# Filter itemsets of length >= 2 and min support >= 0.3 (adjust as needed)
+filtered_itemsets = frequent_itemsets[(frequent_itemsets['length'] >= 2) & (frequent_itemsets['support'] >= 0.3)]
+
+# Generate association rules with confidence >= 0.5
+rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=0.5)
+
+# Filter rules where 'Crash Type' is in the antecedents and 'Road User' is in the consequents
+filtered_rules = rules[
+    rules['antecedents'].apply(lambda x: 'Crash Type' in x) &
+    rules['consequents'].apply(lambda x: 'National Road Type' in x)
+]
+
+
+# View the filtered results
+result_filtered = filtered_rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']]
+print(result_filtered)
+
+#Optional: Save the filtered rules to a CSV file
+result_filtered.to_csv('Filtered_Association_Rules.csv', index=False)
+
+#Filter rules with high lift for stronger associations (optional)
+strong_rules = rules[rules['lift'] >= 1]
+
+#View the results
+result_arm = strong_rules[['antecedents', 'consequents', 'support', 'confidence', 'lift']]
+print(result_arm)
+result_arm.to_csv('Result Arm.csv', index=False)
+#Optional: Filter rules with very high confidence
+high_conf_rules = result_arm[(result_arm['confidence'] > 0.7) & (rules['lift'] >= 1.0)]
+print("\nHigh Confidence Rules (>= 0.7):")
+print(high_conf_rules)
+#export the high confidence rules to a CSV file
+high_conf_rules.to_csv('high_confidence_rules.csv', index=False)
+
