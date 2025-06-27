@@ -1,0 +1,157 @@
+-- 1. Create Dim_Location table
+CREATE TABLE dim_location (
+    Location_PK VARCHAR(255) PRIMARY KEY,
+    State VARCHAR(255),
+    "National Remoteness Areas" VARCHAR(255),
+    "SA4 Name 2021" VARCHAR(255),
+    "National LGA Name 2021" VARCHAR(255)
+);
+-- Load data into Dim_Location
+COPY dim_location(Location_PK, State, "National Remoteness Areas", "SA4 Name 2021", "National LGA Name 2021")
+FROM './data/dim_location.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 2. Create Dim_RoadType table
+CREATE TABLE dim_roadtype (
+    RoadType_PK VARCHAR(255) PRIMARY KEY,
+    "National Road Type" VARCHAR(255)
+);
+-- Load data into Dim_RoadType
+COPY dim_roadtype(RoadType_PK, "National Road Type")
+FROM './data/dim_roadtype.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 3. Create Dim_Date table
+CREATE TABLE dim_date (
+    Date_PK VARCHAR(255) PRIMARY KEY,
+    Year INT,
+    Month INT,
+    Dayweek VARCHAR(255),
+    Day_Category VARCHAR(255)
+);
+-- Load data into Dim_Date
+COPY dim_date(Date_PK, Year, Month, Dayweek, Day_Category)
+FROM './data/dim_date.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 4. Create Dim_HolidayPeriod table
+CREATE TABLE dim_holidayperiod (
+    Holiday_PK VARCHAR(255) PRIMARY KEY,
+    "Christmas Period" BOOLEAN,
+    "Easter Period" BOOLEAN
+);
+-- Load data into Dim_HolidayPeriod
+COPY dim_holidayperiod(Holiday_PK, "Christmas Period", "Easter Period")
+FROM './data/dim_holidayperiod.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 5. Create Dim_Time table
+CREATE TABLE dim_time (
+    Time_PK VARCHAR(255) PRIMARY KEY,
+    Time TIME,
+    "Time of Day" VARCHAR(255)
+);
+-- Load data into Dim_Time
+COPY dim_time(Time_PK, Time, "Time of Day")
+FROM './data/dim_time.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 6. Create Dim_Victim table
+CREATE TABLE dim_victim (
+    Victim_PK VARCHAR(255) PRIMARY KEY,
+    Gender VARCHAR(50),
+    "Age Group" VARCHAR(255),
+    "Road User" VARCHAR(255),
+    Age NUMERIC
+);
+-- Load data into Dim_Victim
+COPY dim_victim(Victim_PK, Gender, "Age Group", "Road User", Age)
+FROM './data/dim_victim.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 7. Create Dim_Crash table
+CREATE TABLE dim_crash (
+    Crash_PK VARCHAR(255) PRIMARY KEY,
+    CrashID VARCHAR(255),
+    "Crash Type" VARCHAR(255),
+    "Speed Limit" NUMERIC,
+    "Speed_Group" VARCHAR(255),
+    "Bus Involvement" BOOLEAN,
+    "Heavy Rigid Truck Involvement" BOOLEAN,
+    "Articulated Truck Involvement" BOOLEAN
+);
+-- Load data into Dim_Crash
+COPY dim_crash(Crash_PK, CrashID, "Crash Type", "Speed Limit", "Speed_Group", "Bus Involvement", "Heavy Rigid Truck Involvement", "Articulated Truck Involvement")
+FROM './data/dim_crash.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 8. Create Dim_Population table
+CREATE TABLE dim_population (
+    Population_PK VARCHAR(255) PRIMARY KEY,
+    "LGA code" VARCHAR(255),
+    "Local Government Area" VARCHAR(255),
+    Year INT,
+    Population NUMERIC
+);
+-- Load data into Dim_Population
+COPY dim_population(Population_PK, "LGA code", "Local Government Area", Year, Population)
+FROM './data/dim_population.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 9. Create Fact_Fatality table
+CREATE TABLE fact_fatality (
+    F_PK VARCHAR(255) PRIMARY KEY,
+    Location_PK VARCHAR(255),
+    RoadType_PK VARCHAR(255),
+    Date_PK VARCHAR(255),
+    Holiday_PK VARCHAR(255),
+    Time_PK VARCHAR(255),
+    Victim_PK VARCHAR(255),
+    Crash_PK VARCHAR(255),
+    Population_PK VARCHAR(255),
+    "Number Fatalities" INT
+);
+-- Load data into Fact_Fatality
+COPY fact_fatality(F_PK, Location_PK, RoadType_PK, Date_PK, Holiday_PK, Time_PK, Victim_PK, Crash_PK, Population_PK, "Number Fatalities")
+FROM './data/fact_fatality.csv'
+WITH (FORMAT csv, DELIMITER ',', HEADER true);
+
+-- 1. Add a foreign key relationship between fact_fatality and dim_location
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_location
+FOREIGN KEY (Location_PK) REFERENCES dim_location(Location_PK);
+
+-- 2. Connect dim_roadtype to fact_fatality
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_roadtype
+FOREIGN KEY (RoadType_PK) REFERENCES dim_roadtype(RoadType_PK);
+
+-- 3. Connect dim_date to fact_fatality
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_date
+FOREIGN KEY (Date_PK) REFERENCES dim_date(Date_PK);
+
+-- 4. Connect dim_holidayperiod to fact_fatality
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_holidayperiod
+FOREIGN KEY (Holiday_PK) REFERENCES dim_holidayperiod(Holiday_PK);
+
+-- 5. Connect dim_time to fact_fatality
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_time
+FOREIGN KEY (Time_PK) REFERENCES dim_time(Time_PK);
+
+-- 6. Connect dim_victim to fact_fatality
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_victim
+FOREIGN KEY (Victim_PK) REFERENCES dim_victim(Victim_PK);
+
+-- 7. Connect dim_crash to fact_fatality
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_crash
+FOREIGN KEY (Crash_PK) REFERENCES dim_crash(Crash_PK);
+
+-- 8. Connect dim_population to fact_fatality
+ALTER TABLE fact_fatality
+ADD CONSTRAINT fk_fact_population
+FOREIGN KEY (Population_PK) REFERENCES dim_population(Population_PK);
